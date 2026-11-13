@@ -1,0 +1,7 @@
+# Todas las direcciones pasan por index.php
+<IfModule mod_rewrite.c>
+RewriteEngine On
+# RewriteBase /
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^ index.php [L,QSA]
+</IfModule>
