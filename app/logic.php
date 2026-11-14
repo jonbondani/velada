@@ -341,3 +341,96 @@ function public_methods() {
 }
 function event_public(array $ev) { return $ev['status'] === 'published' && $ev['starts_at'] >= now(); }
 function min_price($eventId) { $p = val('SELECT MIN(price) FROM ticket_types WHERE event_id=? AND active=1', [$eventId]); return $p === null ? null : (float)$p; }
+
+/* ---------- Acciones compartidas por el panel y por el acceso de IA (una sola implementacion) ---------- */
+const PAYOUT_METHODS = ['transfer' => 'Transferencia', 'bizum' => 'Bizum', 'cash' => 'Efectivo', 'card' => 'Tarjeta', 'domiciliado' => 'Domiciliación'];
+
+function checkin_counts($eventId) {
+    return ['in' => (int)val("SELECT COUNT(*) FROM tickets WHERE event_id=? AND status='used'", [$eventId]), 'all' => (int)val("SELECT COUNT(*) FROM tickets WHERE event_id=? AND status<>'void'", [$eventId])];
+}
+// Valida (o deshace) una entrada. $raw puede ser el codigo o la direccion completa del QR.
+function checkin_scan($raw, $evId = 0, $undo = false) {
+    $raw = trim((string)$raw);
+    if (preg_match('#/c/([A-Za-z0-9]+)#', $raw, $m)) $raw = $m[1];
+    $code = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $raw));
+    $t = $code !== '' ? row('SELECT t.*, e.title FROM tickets t JOIN events e ON e.id=t.event_id WHERE t.code=?', [$code]) : null;
+    $out = ['ok' => false, 'level' => 'err', 'title' => 'Entrada no encontrada', 'text' => 'Este código no corresponde a ninguna entrada. Comprueba que se ha leído bien.'];
+    if (!$t) return $out;
+    $who = $t['holder_name'] . ' · ' . $t['type_name'];
+    if ($undo) { q("UPDATE tickets SET status='valid', checked_in_at=NULL, checked_in_by=NULL WHERE id=? AND status='used'", [$t['id']]); $out = ['ok' => true, 'level' => 'warn', 'title' => 'Entrada deshecha', 'text' => $who . '. Vuelve a estar pendiente de entrar.']; }
+    elseif ($evId && (int)$t['event_id'] !== (int)$evId) $out = ['ok' => false, 'level' => 'err', 'title' => 'Entrada de otro evento', 'text' => 'Esta entrada es para "' . $t['title'] . '".'];
+    elseif ($t['status'] === 'void') $out = ['ok' => false, 'level' => 'err', 'title' => 'Entrada anulada', 'text' => $who . '. La reserva fue cancelada o devuelta.'];
+    elseif ($t['status'] === 'used') $out = ['ok' => false, 'level' => 'warn', 'title' => 'Ya había entrado', 'text' => $who . '. Se validó el ' . fdt($t['checked_in_at']) . '.', 'code' => $t['code']];
+    else {
+        $n = q("UPDATE tickets SET status='used', checked_in_at=?, checked_in_by=? WHERE id=? AND status='valid'", [now(), user()['id'], $t['id']])->rowCount();
+        $out = $n ? ['ok' => true, 'level' => 'ok', 'title' => 'Adelante', 'text' => $who, 'code' => $t['code']] : ['ok' => false, 'level' => 'warn', 'title' => 'Ya había entrado', 'text' => $who];
+    }
+    $out['counts'] = checkin_counts($t['event_id']);
+    return $out;
+}
+// Devuelve una reserva pagada. Resultado: [bool correcto, string mensaje]
+function refund_order(array $o) {
+    if ($o['status'] !== 'paid') return [false, 'Solo se pueden devolver reservas pagadas.'];
+    $msg = 'Reserva devuelta: entradas anuladas y factura rectificativa emitida.';
+    if ($o['method'] === 'stripe' && $o['stripe_pi'] && stripe_on()) {
+        try { stripe_api('POST', 'refunds', ['payment_intent' => $o['stripe_pi']]); $msg .= ' El importe se ha devuelto a la tarjeta.'; }
+        catch (Throwable $e) { return [false, 'No se pudo devolver el cobro en la pasarela: ' . $e->getMessage() . ' La reserva no se ha modificado.']; }
+    } else $msg .= ' Recuerda devolver el dinero a la clienta por el mismo medio en que pagó.';
+    cancel_order($o['id']); log_activity('Reserva devuelta', $o['num']);
+    return [true, $msg];
+}
+function settlement_calc(array $ev) {
+    $rev = (float)val("SELECT COALESCE(SUM(total),0) FROM orders WHERE event_id=? AND status='paid'", [$ev['id']]);
+    $gross = round($rev / (1 + (float)$ev['tax_pct'] / 100), 2);
+    $pct = (float)$ev['partner_share_pct'] > 0 ? (float)$ev['partner_share_pct'] : (float)val('SELECT share_pct FROM partners WHERE id=?', [$ev['partner_id']]);
+    return ['gross' => $gross, 'share_pct' => $pct, 'fee' => (float)$ev['partner_fee'], 'amount' => round($gross * $pct / 100 + (float)$ev['partner_fee'], 2)];
+}
+// Genera la liquidacion de un evento con partner. Devuelve su id, o null si no procede o ya existe.
+function make_settlement($eventId) {
+    $ev = row('SELECT * FROM events WHERE id=? AND partner_id IS NOT NULL', [(int)$eventId]);
+    if (!$ev || val('SELECT COUNT(*) FROM settlements WHERE event_id=?', [$ev['id']])) return null;
+    $id = insert('settlements', settlement_calc($ev) + ['partner_id' => $ev['partner_id'], 'event_id' => $ev['id'], 'status' => 'pending', 'created_at' => now()]);
+    log_activity('Liquidación generada', $ev['title']);
+    return $id;
+}
+function payment_row($amount, $date, $method, $ref) {
+    return ['amount' => $amount, 'paid_at' => $date ?: date('Y-m-d'), 'method' => isset(PAYOUT_METHODS[$method]) ? $method : 'transfer', 'reference' => (string)$ref, 'user_id' => user()['id'] ?? null, 'created_at' => now()];
+}
+function pay_supplier_invoice(array $inv, $amount, $date = '', $method = 'transfer', $ref = '') {
+    $amount = round((float)$amount, 2); if ($amount <= 0) return false;
+    insert('payments', payment_row($amount, $date, $method, $ref) + ['kind' => 'supplier', 'supplier_invoice_id' => $inv['id']]);
+    $paid = (float)val('SELECT COALESCE(SUM(amount),0) FROM payments WHERE supplier_invoice_id=?', [$inv['id']]);
+    update('supplier_invoices', ['paid' => $paid, 'status' => $paid >= (float)$inv['total'] - 0.005 ? 'paid' : 'partial'], $inv['id']);
+    log_activity('Pago a proveedor', money($amount) . ' · factura ' . $inv['num']);
+    return true;
+}
+function pay_settlement(array $s, $amount, $date = '', $method = 'transfer', $ref = '') {
+    $amount = round((float)$amount, 2); if ($amount <= 0) return false;
+    insert('payments', payment_row($amount, $date, $method, $ref) + ['kind' => 'partner', 'settlement_id' => $s['id']]);
+    $paid = (float)val('SELECT COALESCE(SUM(amount),0) FROM payments WHERE settlement_id=?', [$s['id']]);
+    update('settlements', ['paid' => $paid, 'status' => $paid >= (float)$s['amount'] - 0.005 ? 'paid' : 'pending'], $s['id']);
+    log_activity('Pago a partner', money($amount));
+    return true;
+}
+// Cambia el estado de un evento. Devuelve un mensaje de error o null si todo va bien.
+function event_set_status(array $ev, $status) {
+    if (!isset(EVENT_STATUS[$status])) return 'Estado no válido.';
+    if ($status === 'published' && !val('SELECT COUNT(*) FROM ticket_types WHERE event_id=? AND active=1', [$ev['id']])) return 'Antes de publicar, añade al menos un tipo de entrada.';
+    update('events', ['status' => $status], $ev['id']);
+    log_activity('Evento: ' . EVENT_STATUS[$status], $ev['title']);
+    return null;
+}
+function event_load_tasks(array $ev) {
+    $t0 = strtotime($ev['starts_at']);
+    foreach (TASK_TEMPLATE as $t) insert('tasks', ['event_id' => $ev['id'], 'phase' => $t[0], 'title' => $t[1], 'due_date' => date('Y-m-d', $t0 + $t[2] * 86400), 'assignee_id' => $ev['manager_id']]);
+    return count(TASK_TEMPLATE);
+}
+// Envia recordatorio ('remind') o encuesta ('survey') a las reservas pagadas. Devuelve cuantos correos salen.
+function event_notify($eventId, $kind) {
+    $n = 0;
+    foreach (rows("SELECT id, survey_sent FROM orders WHERE event_id=? AND status='paid'", [$eventId]) as $o) {
+        if ($kind === 'remind') { mail_reminder($o['id']); $n++; }
+        elseif (!$o['survey_sent']) { mail_survey($o['id']); $n++; }
+    }
+    return $n;
+}

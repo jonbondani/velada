@@ -22,16 +22,11 @@ $act = $_GET['act'] ?? '';
 if (is_post() && $act !== '') {
     need('events', 'w');
     if ($act === 'status' && isset(EVENT_STATUS[$_POST['status'] ?? ''])) {
-        if ($_POST['status'] === 'published' && !val('SELECT COUNT(*) FROM ticket_types WHERE event_id=? AND active=1', [$id])) { flash('Antes de publicar, añade al menos un tipo de entrada.', 'err'); redirect($self(['tab' => 'entradas'])); }
-        update('events', ['status' => $_POST['status']], $id);
-        log_activity('Evento: ' . EVENT_STATUS[$_POST['status']], $ev['title']);
+        $err = event_set_status($ev, $_POST['status']);
+        if ($err) { flash($err, 'err'); redirect($self(['tab' => 'entradas'])); }
         flash($_POST['status'] === 'cancelled' ? 'Evento cancelado. Recuerda devolver las reservas pagadas desde Ventas.' : 'Estado actualizado: ' . EVENT_STATUS[$_POST['status']] . '.');
     } elseif ($act === 'remind' || $act === 'survey') {
-        $n = 0;
-        foreach (rows("SELECT id, survey_sent FROM orders WHERE event_id=? AND status='paid'", [$id]) as $o) {
-            if ($act === 'remind') { mail_reminder($o['id']); $n++; }
-            elseif (!$o['survey_sent']) { mail_survey($o['id']); $n++; }
-        }
+        $n = event_notify($id, $act);
         flash($n ? ($act === 'remind' ? "Recordatorio enviado a $n reservas." : "Encuesta enviada a $n reservas.") : ($act === 'survey' ? 'La encuesta ya se había enviado a todas las reservas.' : 'No hay reservas pagadas a las que escribir.'));
     } elseif ($act === 'duplicate') {
         $n = $ev; foreach (['id', 'vname', 'rental_cost', 'pname', 'pshare', 'mname'] as $k) unset($n[$k]);
@@ -46,8 +41,7 @@ if (is_post() && $act !== '') {
         flash('Evento duplicado con sus entradas, montaje, tareas y personal. Revisa la fecha antes de publicarlo.');
         redirect(url('admin/events', ['do' => 'edit', 'rid' => $nid]));
     } elseif ($act === 'template') {
-        $t0 = strtotime($ev['starts_at']);
-        foreach (TASK_TEMPLATE as $t) insert('tasks', ['event_id' => $id, 'phase' => $t[0], 'title' => $t[1], 'due_date' => date('Y-m-d', $t0 + $t[2] * 86400), 'assignee_id' => $ev['manager_id']]);
+        event_load_tasks($ev);
         flash('Lista de tareas habitual cargada. Ajusta fechas y responsables a tu gusto.');
     } elseif ($act === 'task') {
         $t = row('SELECT * FROM tasks WHERE id=? AND event_id=?', [(int)($_GET['t'] ?? 0), $id]);

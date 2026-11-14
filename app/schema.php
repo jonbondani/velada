@@ -3,7 +3,7 @@
 // pk, str, text, int, ref (id opcional), money, dt (fecha y hora), date, bool
 return [
 'settings' => ['cols'=>['k'=>'key','v'=>'text']],
-'users' => ['cols'=>['id'=>'pk','name'=>'str','email'=>'str','pass'=>'str','role'=>'str','partner_id'=>'ref','active'=>'bool','tour_done'=>'bool','last_login'=>'dt','created_at'=>'dt'],'uniq'=>['email']],
+'users' => ['cols'=>['id'=>'pk','name'=>'str','email'=>'str','pass'=>'str','role'=>'str','partner_id'=>'ref','active'=>'bool','is_super'=>'bool','tour_done'=>'bool','last_login'=>'dt','created_at'=>'dt'],'uniq'=>['email']],
 'login_attempts' => ['cols'=>['id'=>'pk','ip'=>'str','created_at'=>'dt'],'idx'=>['ip']],
 'partners' => ['cols'=>['id'=>'pk','name'=>'str','speciality'=>'str','contact'=>'str','email'=>'str','phone'=>'str','tax_id'=>'str','iban'=>'str','share_pct'=>'money','instagram'=>'str','notes'=>'text','active'=>'bool','created_at'=>'dt']],
 'venues' => ['cols'=>['id'=>'pk','name'=>'str','address'=>'str','city'=>'str','capacity'=>'int','contact'=>'str','phone'=>'str','email'=>'str','rental_cost'=>'money','features'=>'text','maps_url'=>'str','notes'=>'text','active'=>'bool','created_at'=>'dt']],
@@ -28,5 +28,7 @@ return [
 'pageviews' => ['cols'=>['id'=>'pk','day'=>'date','created_at'=>'dt','kind'=>'str','path'=>'str','event_id'=>'ref','visitor'=>'str','referrer'=>'str','utm_source'=>'str','utm_medium'=>'str','utm_campaign'=>'str','device'=>'str'],'idx'=>['day','event_id']],
 'feedback' => ['cols'=>['id'=>'pk','event_id'=>'ref','order_id'=>'ref','rating'=>'int','nps'=>'int','liked'=>'text','improve'=>'text','created_at'=>'dt'],'idx'=>['event_id','order_id']],
 'emails' => ['cols'=>['id'=>'pk','to_email'=>'str','subject'=>'str','body'=>'text','sent'=>'bool','created_at'=>'dt']],
+'ai_tokens' => ['cols'=>['id'=>'pk','user_id'=>'ref','name'=>'str','token_hash'=>'str','prefix'=>'str','readonly'=>'bool','expires_at'=>'dt','last_used_at'=>'dt','revoked'=>'bool','created_at'=>'dt'],'uniq'=>['token_hash'],'idx'=>['user_id']],
+'ai_log' => ['cols'=>['id'=>'pk','created_at'=>'dt','token_id'=>'ref','user_id'=>'ref','role'=>'str','ip'=>'str','client'=>'str','method'=>'str','tool'=>'str','args'=>'text','status'=>'str','detail'=>'text','ms'=>'int'],'idx'=>['created_at','user_id','status','ip']],
 'activity' => ['cols'=>['id'=>'pk','user_id'=>'ref','action'=>'str','detail'=>'str','created_at'=>'dt']],
 ];

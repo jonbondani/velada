@@ -16,12 +16,7 @@ if ($id) {
         if ($act === 'pay') { if (mark_paid($id, trim((string)($_POST['ref'] ?? '')))) { log_activity('Pago confirmado', $o['num']); flash('Pago confirmado. Las entradas se han enviado por correo.'); } }
         elseif ($act === 'cancel' && $o['status'] === 'pending') { cancel_order($id); log_activity('Reserva cancelada', $o['num']); flash('Reserva cancelada. Las plazas vuelven a estar disponibles.'); }
         elseif ($act === 'refund' && $o['status'] === 'paid') {
-            $msg = 'Reserva devuelta: entradas anuladas y factura rectificativa emitida.';
-            if ($o['method'] === 'stripe' && $o['stripe_pi'] && stripe_on()) {
-                try { stripe_api('POST', 'refunds', ['payment_intent' => $o['stripe_pi']]); $msg .= ' El importe se ha devuelto a la tarjeta.'; }
-                catch (Throwable $e) { flash('No se pudo devolver el cobro en la pasarela: ' . $e->getMessage() . ' La reserva no se ha modificado.', 'err'); redirect(url('admin/orders', ['id' => $id])); }
-            } else $msg .= ' Recuerda devolver el dinero a la clienta por el mismo medio en que pagó.';
-            cancel_order($id); log_activity('Reserva devuelta', $o['num']); flash($msg);
+            [$okR, $msgR] = refund_order($o); flash($msgR, $okR ? 'ok' : 'err');
         } elseif ($act === 'resend') { $o['status'] === 'paid' ? mail_order_paid($id) : mail_order_pending($id); flash('Correo reenviado a ' . $o['cemail'] . '.'); }
         elseif ($act === 'notes') { update('orders', ['notes' => (string)($_POST['notes'] ?? '')], $id); flash('Notas guardadas.'); }
         redirect(url('admin/orders', ['id' => $id]));

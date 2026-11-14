@@ -26,6 +26,7 @@ function tours() {
         $nav('stats', 'Estadísticas', 'De dónde vienen las ventas, qué eventos funcionan mejor, cómo crecen las redes y qué opinan las asistentes.'),
         $nav('users', 'Usuarios', 'Da acceso a tu equipo. Cada persona ve solo lo que corresponde a su perfil.'),
         $nav('settings', 'Ajustes', 'Datos del negocio, textos de la web, formas de cobro y textos legales.'));
+    if (is_super() || ai_allowed($u)) $g[] = $s('admin', [], '.side a[data-m="ai"]', 'Inteligencia artificial', is_super() ? 'Aquí decides quién puede conectar una IA, ves todo lo que hacen en el registro y tienes el botón para apagarla al instante.' : 'Aquí puedes conectar una IA para que trabaje por ti, con tus mismos permisos y nada más.');
     $g[] = $s('admin', [], '#helplink', 'Siempre a mano', 'Aquí puedes repetir este recorrido y ver los tutoriales paso a paso de cada tarea. ¡Listo, ya puedes empezar!');
     $T['general'] = ['title' => 'Recorrido general', 'desc' => 'Dónde está cada cosa, en dos minutos.', 'steps' => $g];
 
@@ -109,6 +110,16 @@ function tours() {
             $s('admin/settings', ['tab' => 'legal'], '.form', 'Textos legales', 'Hay un texto base para condiciones, privacidad y aviso legal. Revísalo con tu asesoría.'),
             $s('admin/users', [], '.actions .btn.primary', 'Tu equipo', 'Crea un usuario para cada persona y elige su perfil.'),
             $s('admin/users', [], '.panel', 'Qué ve cada perfil', 'Esta tabla resume a qué secciones entra cada perfil.')]];
+    }
+    /* Inteligencia artificial (solo superusuario) */
+    if (is_super()) {
+        $a = fn($p, $sel, $title, $text) => $s('admin/ai', $p, $sel, $title, $text);
+        $T['ia'] = ['title' => 'Controlar el acceso de IA', 'desc' => 'Encender, apagar, dar permiso y revisar el registro.', 'steps' => [
+            $a(['tab' => 'estado'], '.aiswitch', 'El interruptor', 'Con la IA apagada no entra nadie, tenga el token que tenga. Si algo te preocupa, apaga primero y revisa después.'),
+            $a(['tab' => 'estado'], '.cols .panel', 'Quién puede conectar una IA', 'Marca los perfiles que pueden crear conexiones. La IA de cada persona hereda sus permisos y nunca los supera.'),
+            $a(['tab' => 'estado'], '.cols .panel:nth-child(2)', 'El servidor', 'La dirección que hay que dar a la IA y la comprobación de que todo lo expuesto está clasificado.'),
+            $a(['tab' => 'conexiones'], '.form', 'Crear una conexión', 'Cada conexión es un token personal. Puedes limitarla a solo consulta y ponerle caducidad.'),
+            $a(['tab' => 'registro'], '.toolbar', 'El registro', 'Cada petición de cada IA, con quién, qué, cuándo, desde dónde y con qué resultado. Solo lo ve el superusuario.')]];
     }
     return $T;
 }

@@ -1,6 +1,8 @@
 # Todas las direcciones pasan por index.php
 <IfModule mod_rewrite.c>
 RewriteEngine On
+# Conserva la cabecera Authorization (la necesitan las conexiones de IA)
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 # RewriteBase /
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteRule ^ index.php [L,QSA]

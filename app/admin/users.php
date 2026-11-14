@@ -15,10 +15,15 @@ $r = crud([
         'partner_id' => ['label' => 'Partner vinculado', 'type' => 'select', 'options' => fn() => pairs('SELECT id, name FROM partners ORDER BY name'), 'help' => 'Solo para el perfil Partner: verá únicamente sus eventos.'],
         'newpass' => ['label' => 'Contraseña', 'type' => 'static', 'render' => fn() => '<label class="fld"><span>Contraseña nueva</span><input type="password" name="newpass" minlength="8" autocomplete="new-password"><small>Mínimo 8 caracteres. Déjalo vacío para no cambiarla.</small></label>'],
         'active' => ['label' => 'Puede entrar al panel', 'type' => 'check', 'default' => 1, 'list' => 1, 'short' => 'Activo'],
-    ],
-    'cols' => ['Último acceso' => fn($r) => $r['last_login'] ? e(fdt($r['last_login'])) : '<span class="mute">Nunca</span>'],
+    ] + (is_super() ? ['is_super' => ['label' => 'Superusuario: controla el acceso de IA, su registro y el botón de apagado', 'type' => 'check', 'full' => 1]] : []),
+    'cols' => ['' => fn($r) => !empty($r['is_super']) ? badge('Superusuario', 'blue') : '', 'Último acceso' => fn($r) => $r['last_login'] ? e(fdt($r['last_login'])) : '<span class="mute">Nunca</span>'],
     'validate' => function (array &$d, $rec) {
         $d['email'] = strtolower($d['email']);
+        if ($rec && !empty($rec['is_super']) && !is_super()) return 'Solo un superusuario puede modificar a otro superusuario.';
+        if (isset($d['is_super'])) {
+            if ($d['is_super'] && $d['role'] !== 'admin') return 'El superusuario debe tener perfil de administración.';
+            if ($rec && !empty($rec['is_super']) && !$d['is_super'] && (int)val('SELECT COUNT(*) FROM users WHERE is_super=1 AND active=1') <= 1) return 'Tiene que quedar al menos un superusuario.';
+        }
         $np = (string)($_POST['newpass'] ?? '');
         if (!$rec && strlen($np) < 8) return 'Indica una contraseña de al menos 8 caracteres.';
         if ($np !== '' && strlen($np) < 8) return 'La contraseña debe tener al menos 8 caracteres.';
@@ -27,7 +32,11 @@ $r = crud([
         if ($rec && (int)$rec['id'] === (int)user()['id'] && ($d['role'] !== 'admin' || !$d['active'])) return 'No puedes quitarte a ti misma el perfil de administración ni desactivarte.';
         return null;
     },
-    'before_delete' => function ($r) { if ((int)$r['id'] === (int)user()['id']) throw new RuntimeException('No puedes eliminar tu propio usuario.'); },
+    'before_delete' => function ($r) {
+        if ((int)$r['id'] === (int)user()['id']) throw new RuntimeException('No puedes eliminar tu propio usuario.');
+        if (!empty($r['is_super'])) throw new RuntimeException('Un superusuario no se puede eliminar. Quítale antes esa condición.');
+        q('UPDATE ai_tokens SET revoked=1 WHERE user_id=?', [$r['id']]);
+    },
     'after_save' => fn($id, $d, $new) => log_activity($new ? 'Usuario creado' : 'Usuario modificado', $d['email']),
 ]);
 admin_page('Usuarios', $r['html'] . ($r['mode'] === 'list' ? $roleHelp : ''), $r['actions'], $r['mode'] === 'form' ? url('admin/users') : '');

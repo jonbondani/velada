@@ -5,30 +5,19 @@ $w = can('finance', 'w');
 $tabsAll = ['resumen' => 'Resumen', 'facturas' => 'Facturas de proveedores', 'liquidaciones' => 'Liquidaciones a partners', 'pagos' => 'Pagos realizados', 'emitidas' => 'Facturas emitidas'];
 $tab = isset($tabsAll[$_GET['tab'] ?? '']) ? $_GET['tab'] : 'resumen';
 $P = ['tab' => $tab]; $self = fn($x = []) => url('admin/finance', $x + $P);
-$payMethods = ['transfer' => 'Transferencia', 'bizum' => 'Bizum', 'cash' => 'Efectivo', 'card' => 'Tarjeta', 'domiciliado' => 'Domiciliación'];
+$payMethods = PAYOUT_METHODS;
 $INV_STATUS = ['pending' => 'Pendiente', 'partial' => 'Pago parcial', 'paid' => 'Pagada']; $INV_BADGE = ['pending' => 'orange', 'partial' => 'blue', 'paid' => 'green'];
-
-function settlement_calc(array $ev) {
-    $rev = (float)val("SELECT COALESCE(SUM(total),0) FROM orders WHERE event_id=? AND status='paid'", [$ev['id']]);
-    $gross = round($rev / (1 + (float)$ev['tax_pct'] / 100), 2);
-    $pct = (float)$ev['partner_share_pct'] > 0 ? (float)$ev['partner_share_pct'] : (float)val('SELECT share_pct FROM partners WHERE id=?', [$ev['partner_id']]);
-    return ['gross' => $gross, 'share_pct' => $pct, 'fee' => (float)$ev['partner_fee'], 'amount' => round($gross * $pct / 100 + (float)$ev['partner_fee'], 2)];
-}
 
 /* ---------- Acciones ---------- */
 $act = $_GET['act'] ?? '';
 if (is_post() && $act !== '') {
     need('finance', 'w');
     $amount = round((float)str_replace(',', '.', (string)($_POST['amount'] ?? 0)), 2);
-    $pay = ['amount' => $amount, 'paid_at' => $_POST['paid_at'] ?? date('Y-m-d'), 'method' => isset($payMethods[$_POST['method'] ?? '']) ? $_POST['method'] : 'transfer', 'reference' => $_POST['reference'] ?? '', 'user_id' => user()['id'], 'created_at' => now()];
+    $pd = (string)($_POST['paid_at'] ?? ''); $pmth = (string)($_POST['method'] ?? 'transfer'); $pref = (string)($_POST['reference'] ?? '');
     if ($act === 'pay') {
         $inv = row('SELECT * FROM supplier_invoices WHERE id=?', [(int)($_GET['inv'] ?? 0)]);
-        if ($inv && $amount > 0) {
-            insert('payments', $pay + ['kind' => 'supplier', 'supplier_invoice_id' => $inv['id']]);
-            $paid = (float)val('SELECT COALESCE(SUM(amount),0) FROM payments WHERE supplier_invoice_id=?', [$inv['id']]);
-            update('supplier_invoices', ['paid' => $paid, 'status' => $paid >= (float)$inv['total'] - 0.005 ? 'paid' : 'partial'], $inv['id']);
-            log_activity('Pago a proveedor', money($amount) . ' · factura ' . $inv['num']); flash('Pago de ' . money($amount) . ' registrado.');
-        } else flash('Indica un importe mayor que cero.', 'err');
+        if ($inv && pay_supplier_invoice($inv, $amount, $pd, $pmth, $pref)) flash('Pago de ' . money($amount) . ' registrado.');
+        else flash('Indica un importe mayor que cero.', 'err');
         redirect($self(['do' => 'edit', 'rid' => (int)($_GET['inv'] ?? 0)]));
     }
     if ($act === 'delpay') {
@@ -42,21 +31,12 @@ if (is_post() && $act !== '') {
         redirect($_SERVER['HTTP_REFERER'] ?? $self());
     }
     if ($act === 'settle') {
-        $ev = row('SELECT * FROM events WHERE id=? AND partner_id IS NOT NULL', [(int)($_GET['ev'] ?? 0)]);
-        if ($ev && !val('SELECT COUNT(*) FROM settlements WHERE event_id=?', [$ev['id']])) {
-            insert('settlements', settlement_calc($ev) + ['partner_id' => $ev['partner_id'], 'event_id' => $ev['id'], 'status' => 'pending', 'created_at' => now()]);
-            log_activity('Liquidación generada', $ev['title']); flash('Liquidación generada. Revísala y registra el pago cuando lo hagas.');
-        }
+        if (make_settlement((int)($_GET['ev'] ?? 0))) flash('Liquidación generada. Revísala y registra el pago cuando lo hagas.');
         redirect($self());
     }
     if ($act === 'paysettle') {
         $s = row('SELECT * FROM settlements WHERE id=?', [(int)($_GET['s'] ?? 0)]);
-        if ($s && $amount > 0) {
-            insert('payments', $pay + ['kind' => 'partner', 'settlement_id' => $s['id']]);
-            $paid = (float)val('SELECT COALESCE(SUM(amount),0) FROM payments WHERE settlement_id=?', [$s['id']]);
-            update('settlements', ['paid' => $paid, 'status' => $paid >= (float)$s['amount'] - 0.005 ? 'paid' : 'pending'], $s['id']);
-            log_activity('Pago a partner', money($amount)); flash('Pago de ' . money($amount) . ' registrado.');
-        }
+        if ($s && pay_settlement($s, $amount, $pd, $pmth, $pref)) flash('Pago de ' . money($amount) . ' registrado.');
         redirect($self());
     }
     if ($act === 'delsettle') {

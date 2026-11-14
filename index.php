@@ -25,10 +25,11 @@ $seg = explode('/', $route);
 
 if ($route === 'ping-rewrite') { exit('pong'); }
 if ($route === 'stripe/webhook') { stripe_webhook(); }
+migrate();
+if ($seg[0] === 'mcp') { require ROOT . '/app/mcp.php'; mcp_serve(); }
 
 start_session();
 if (is_post()) check_csrf();
-if ($seg[0] === 'admin' || $seg[0] === 'acceso') migrate();
 
 function not_found() {
     http_response_code(404);
@@ -48,7 +49,7 @@ switch ($seg[0]) {
     case 'admin':
         if (!user()) redirect(url('acceso'));
         $mod = $seg[1] ?? 'dashboard';
-        $files = ['dashboard', 'events', 'event', 'orders', 'customers', 'checkin', 'partners', 'venues', 'suppliers', 'finance', 'marketing', 'stats', 'users', 'settings', 'file', 'help'];
+        $files = ['dashboard', 'events', 'event', 'orders', 'customers', 'checkin', 'partners', 'venues', 'suppliers', 'finance', 'marketing', 'stats', 'users', 'settings', 'file', 'help', 'ai'];
         if (!in_array($mod, $files, true)) { http_response_code(404); $MODULE = ''; admin_page('No encontrado', '<div class="empty"><b>Esta sección no existe.</b></div>'); break; }
         $MODULE = ['event' => 'events', 'file' => 'finance'][$mod] ?? $mod;
         require ROOT . '/app/admin/' . $mod . '.php';

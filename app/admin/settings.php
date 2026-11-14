@@ -43,7 +43,7 @@ $forms = [
 if (is_post()) {
     if (!$w) need('users', 'w');
     if (($_GET['act'] ?? '') === 'wipe' && ($_POST['confirm'] ?? '') === 'BORRAR') {
-        foreach (array_keys(schema()) as $t) if (!in_array($t, ['settings', 'users', 'login_attempts'], true)) q("DELETE FROM $t");
+        foreach (array_keys(schema()) as $t) if (!in_array($t, ['settings', 'users', 'login_attempts', 'ai_log', 'ai_tokens'], true)) q("DELETE FROM $t");
         q("UPDATE users SET partner_id=NULL WHERE role<>'partner'"); q("DELETE FROM users WHERE id<>? AND (role='partner' OR email LIKE '%@ejemplo.test')", [user()['id']]);
         foreach (glob(ROOT . '/storage/files/*') ?: [] as $f) @unlink($f);
         log_activity('Datos borrados', 'Se han vaciado eventos, ventas, contactos y finanzas'); flash('Datos borrados. La plataforma está limpia para empezar.');

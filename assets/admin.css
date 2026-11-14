@@ -171,3 +171,13 @@ body.touring.nav .shade{display:none}
 .tourlist .panel{margin:0;display:flex;justify-content:space-between;align-items:center;gap:14px}.tourlist h2{margin-bottom:4px}.tourlist p{margin:0}
 .panel details{border-bottom:1px solid var(--soft);padding:10px 0;margin:0}.panel details:last-child{border:0}.panel details summary{color:var(--ink)}.panel details p{margin:8px 0 0;color:var(--mute)}
 @media(prefers-reduced-motion:reduce){.tour-hole,.tour-card{transition:none}}
+
+/* Acceso de IA */
+.aiswitch{display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap;border-left:6px solid #c7c7cc}.aiswitch.on{border-left-color:#34c759}.aiswitch.off{border-left-color:#ff3b30}
+.aiswitch>div{display:flex;gap:14px;align-items:center}.aiswitch h2{margin-bottom:3px}.aiswitch p{margin:0}
+.aidot{flex:none;width:14px;height:14px;border-radius:50%;background:#ff3b30}.aiswitch.on .aidot{background:#34c759;box-shadow:0 0 0 5px rgba(52,199,89,.2)}
+.btn.big{padding:13px 26px;font-size:16px;font-weight:600;background:#ff3b30;color:#fff}.btn.big:hover{background:#e0352b}
+.rolegrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:9px}
+.newtoken{border:2px solid var(--accent)}.tokenbox{display:flex;gap:10px;align-items:center;background:var(--soft);border-radius:12px;padding:12px 14px;margin:10px 0;flex-wrap:wrap}.tokenbox code{background:none;font-size:14px;overflow-wrap:anywhere;flex:1}
+pre{background:var(--soft);border-radius:10px;padding:12px 14px;font:12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;overflow-wrap:anywhere;margin:6px 0 12px}
+.ailog td{vertical-align:top}.ailog details{margin-top:4px}.ailog summary{font-size:13px}

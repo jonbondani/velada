@@ -32,6 +32,7 @@ function admin_page($title, $content, $actions = '', $back = '') {
     }
     $tourJs = '';
     if ($u) {
+        if (is_super() || ai_allowed($u)) $nav .= '<a data-m="ai" href="' . e(url('admin/ai')) . '"' . ($cur === 'ai' ? ' class="on"' : '') . '><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></svg><span>Inteligencia artificial</span></a>';
         $nav .= '<a id="helplink" data-m="help" href="' . e(url('admin/help')) . '"' . ($cur === 'help' ? ' class="on"' : '') . '><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 114 2c-.9.6-1.5 1.1-1.5 2.2M12 17h.01"/></svg><span>Ayuda y tutorial</span></a>';
         require_once ROOT . '/app/tours.php';
         $tourJs = '<script>window.TOURS=' . json_encode(tours(), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP) . ';window.TOUR_AUTO=' . (empty($u['tour_done']) ? 'true' : 'false') . ';window.TOUR_DONE=' . json_encode(url('admin/help', ['act' => 'done'])) . ';</script>';

@@ -19,8 +19,9 @@ Guía completa de la plataforma de venta y gestión de eventos. Las capturas est
 13. [Finanzas](#13-finanzas)
 14. [Marketing y redes](#14-marketing-y-redes)
 15. [Estadísticas](#15-estadísticas)
-16. [Mantenimiento y copias de seguridad](#16-mantenimiento-y-copias-de-seguridad)
-17. [Dudas frecuentes](#17-dudas-frecuentes)
+16. [Conectar una IA (MCP)](#16-conectar-una-ia-mcp)
+17. [Mantenimiento y copias de seguridad](#17-mantenimiento-y-copias-de-seguridad)
+18. [Dudas frecuentes](#18-dudas-frecuentes)
 
 ---
 
@@ -54,7 +55,7 @@ Necesitas un plan de alojamiento web de IONOS con PHP 8.0 o superior y una base 
 
 ![Instalador](img/01-instalador.png)
 
-5. Rellena los datos de la base de datos, el nombre de tu marca y tu cuenta de administración. Si dejas marcada la casilla de datos de ejemplo, la plataforma arranca con eventos, ventas y estadísticas ficticias para que veas cómo funciona todo. Se borran después con un botón (ver [Mantenimiento](#16-mantenimiento-y-copias-de-seguridad)).
+5. Rellena los datos de la base de datos, el nombre de tu marca y tu cuenta de administración. Si dejas marcada la casilla de datos de ejemplo, la plataforma arranca con eventos, ventas y estadísticas ficticias para que veas cómo funciona todo. Se borran después con un botón (ver [Mantenimiento](#17-mantenimiento-y-copias-de-seguridad)).
 6. Activa el certificado SSL del dominio en IONOS. Es necesario para que funcione la cámara del lector de QR.
 
 Las carpetas `config`, `storage` y `uploads` necesitan permiso de escritura (755 o 775). El instalador avisa en rojo si falta alguno.
@@ -90,6 +91,7 @@ En el menú lateral, abajo, está **Ayuda y tutorial**. Desde ahí se puede repe
 | Facturas, pagos y liquidaciones | La parte económica |
 | Promoción y redes sociales | Planificar publicaciones y medir |
 | Puesta en marcha | Lo que hay que configurar antes de vender (solo administración) |
+| Controlar el acceso de IA | Encender, apagar, dar permiso y revisar el registro (solo superusuario) |
 
 ### La pantalla de inicio
 
@@ -142,6 +144,8 @@ En **Usuarios** se da de alta a cada persona con su perfil. La tabla inferior re
 | Proveedores y montaje | Operaciones | Eventos (montaje, tareas, personal), locales y proveedores |
 | Taquilla y accesos | Quien recibe en la puerta | Leer entradas y consultar reservas |
 | Partner (externo) | Quien realiza el evento | Solo sus eventos, sin cifras económicas ni datos de clientas |
+
+**Superusuario.** La cuenta que instala la plataforma es además superusuario. Es la única que controla el acceso de IA: lo enciende y lo apaga, decide qué perfiles pueden usarlo y ve el registro. Ni siquiera otro administrador puede hacerlo, ni modificar o eliminar al superusuario. Un superusuario puede nombrar a otro desde la ficha del usuario.
 
 No hay recuperación de contraseña por correo: si alguien la olvida, administración le asigna una nueva editando su usuario.
 
@@ -447,7 +451,88 @@ Arriba a la derecha se elige el periodo: 30 días, 3 meses o 12 meses.
 
 ![Opiniones](img/48-estadisticas-opiniones.png)
 
-## 16. Mantenimiento y copias de seguridad
+## 16. Conectar una IA (MCP)
+
+La plataforma incluye un servidor MCP (Model Context Protocol), el estándar con el que asistentes como Claude y otros se conectan a aplicaciones. Con él, una IA puede consultar y gestionar la plataforma en nombre de una persona del equipo.
+
+Tres reglas que no admiten excepción:
+
+1. **La IA nunca puede más que su usuario.** Cada conexión pertenece a una persona y hereda su perfil. Lo que esa persona no puede ver o hacer en el panel, su IA tampoco. Si cambia de perfil o se desactiva su usuario, el cambio se aplica a la IA en la siguiente petición.
+2. **Todo queda registrado.** Cada petición, también las rechazadas, se guarda en un registro que solo ve el superusuario.
+3. **Se puede apagar al instante.** Un botón corta el acceso a todas las IA a la vez.
+
+El acceso de IA viene **apagado** de fábrica.
+
+### Encender, apagar y decidir quién puede (superusuario)
+
+En el menú, **Inteligencia artificial > Estado y apagado**:
+
+![IA apagada](img/54-ia-apagada.png)
+
+Al encenderlo, elige qué perfiles pueden crear conexiones. Los que no estén marcados no ven esta sección ni pueden usar IA, aunque tengan un token antiguo.
+
+![IA encendida](img/55-ia-encendida.png)
+
+El botón rojo **Apagar la IA ahora** corta todas las conexiones en el acto. Mientras esté apagada, cualquier intento se rechaza y se anota. Ante cualquier duda de seguridad: apaga primero y revisa el registro después.
+
+El panel **Servidor** muestra la dirección que hay que dar a la IA y la comprobación de cobertura, que debe decir "Todo clasificado".
+
+### Crear una conexión
+
+Cada persona crea las suyas en **Inteligencia artificial > Conexiones**:
+
+- **Nombre**, para reconocerla después.
+- **Caducidad**: 30 días, 90 días, un año o sin caducidad.
+- **Solo consulta**: la IA puede leer pero no crear, cambiar ni eliminar nada. Viene marcada por defecto.
+
+Al crearla se muestra el token **una sola vez**, con las instrucciones para conectarlo:
+
+![Conexión creada](img/56-ia-conexion.png)
+
+Cualquier cliente compatible con MCP por HTTP sirve. Necesita la dirección del servidor (`https://tudominio.com/mcp`) y la cabecera `Authorization: Bearer` con el token. La web debe estar en https.
+
+El token es como una contraseña: no se comparte ni se sube a ningún sitio. En la plataforma se guarda cifrado y no se puede recuperar; si se pierde, se revoca la conexión y se crea otra.
+
+![Conexiones](img/57-ia-conexiones.png)
+
+Cada persona puede revocar sus conexiones. El superusuario ve las de todo el equipo, puede revocar cualquiera y dispone de **Revocar todas**.
+
+### Qué puede hacer una IA conectada
+
+Depende del perfil de su usuario. A grandes rasgos:
+
+- **Consultar**: eventos, entradas, montaje, tareas, reservas, clientas, facturas, publicaciones, estadísticas.
+- **Gestionar**: crear y cambiar eventos, tareas, proveedores, publicaciones, códigos promocionales.
+- **Acciones**: crear una reserva, confirmar un pago, devolver, validar una entrada, registrar pagos a proveedores, generar liquidaciones, enviar recordatorios.
+
+Las acciones usan exactamente las mismas reglas que el panel: no se vende por encima del aforo, no se publica un evento sin entradas, no se elimina nada que esté en uso.
+
+Lo que una IA no puede hacer nunca, sea cual sea el perfil: gestionar usuarios, cambiar ajustes, ver contraseñas, tokens o claves de pago, leer su propio registro ni tocar el interruptor.
+
+La lista completa de recursos y herramientas, y lo que ve cada perfil, está en la [referencia del MCP](mcp-referencia.md). Los detalles técnicos están en la [guía del MCP](mcp.md).
+
+### El registro (superusuario)
+
+![Registro de IA](img/58-ia-registro.png)
+
+Cada línea indica cuándo, quién (usuario, perfil y conexión), qué herramienta, con qué datos, el resultado y la dirección IP. Se puede filtrar por usuario, resultado, texto y día, y descargar completo.
+
+| Resultado | Significado |
+| --- | --- |
+| Correcto | La petición se atendió |
+| Denegado por permisos | La IA intentó algo que su usuario no puede hacer |
+| Token rechazado | Token inexistente, revocado, caducado, de un usuario inactivo o de un perfil sin permiso |
+| IA apagada | Llegó una petición con el acceso apagado |
+| Error | La petición no era válida o incumplía una regla (por ejemplo, vender sin plazas) |
+| Límite superado | Demasiadas peticiones por minuto |
+| Bloqueado | Conexión sin https o lanzada desde otra web |
+| Cambio en el panel | Encendido, apagado, cambio de permisos, alta o revocación de conexiones |
+
+El registro no se puede editar ni borrar desde la plataforma, y se conserva aunque se borren los datos desde Ajustes. Las acciones hechas por IA aparecen además en Ajustes > Actividad con el prefijo "IA:".
+
+> Probado con el cliente oficial del protocolo y con una batería automática de permisos. No se ha probado todavía en un alojamiento de IONOS real ni con cada asistente del mercado. Los asistentes que solo aceptan conexión por OAuth, sin cabecera con token, no están cubiertos en esta versión.
+
+## 17. Mantenimiento y copias de seguridad
 
 ![Datos](img/52-ajustes-datos.png)
 
@@ -457,7 +542,7 @@ Arriba a la derecha se elige el periodo: 30 días, 3 meses o 12 meses.
 - **Actualizar la plataforma**: sube los ficheros nuevos encima de los anteriores, sin borrar `config/config.php`, `storage` ni `uploads`. Al entrar en el panel, la base de datos se actualiza sola.
 - **Reinstalar desde cero**: borra `config/config.php` y vacía la base de datos.
 
-## 17. Dudas frecuentes
+## 18. Dudas frecuentes
 
 **Una clienta dice que ha pagado por Bizum.** Abre Ventas, busca su reserva y pulsa "Confirmar pago recibido".
 

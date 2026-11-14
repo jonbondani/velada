@@ -36,10 +36,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && $okAll) {
         $CONFIG = ['db' => $db, 'secret' => bin2hex(random_bytes(24)), 'timezone' => 'Europe/Madrid', 'pretty' => $p['pretty'] === '1', 'mail_off' => false];
         require ROOT . '/app/ui.php'; require ROOT . '/app/logic.php';
         if ((int)val('SELECT COUNT(*) FROM users') === 0) {
-            insert('users', ['name' => trim($p['name']), 'email' => strtolower(trim($p['email'])), 'pass' => password_hash($p['pass'], PASSWORD_DEFAULT), 'role' => 'admin', 'active' => 1, 'created_at' => now()]);
+            insert('users', ['name' => trim($p['name']), 'email' => strtolower(trim($p['email'])), 'pass' => password_hash($p['pass'], PASSWORD_DEFAULT), 'role' => 'admin', 'active' => 1, 'is_super' => 1, 'tour_done' => 0, 'created_at' => now()]);
             set_setting('brand', trim($p['brand']));
             set_setting('contact_email', strtolower(trim($p['email'])));
-            set_setting('schema_ver', APP_VER); set_setting('pay_transfer', '1'); set_setting('pay_bizum', '1'); set_setting('tax_pct', '21'); set_setting('hold_hours', '72');
+            set_setting('schema_ver', APP_VER); set_setting('ai_enabled', '0'); set_setting('ai_roles', 'admin'); set_setting('pay_transfer', '1'); set_setting('pay_bizum', '1'); set_setting('tax_pct', '21'); set_setting('hold_hours', '72');
             if (!empty($p['demo'])) { require ROOT . '/app/seed.php'; seed_demo(); }
         }
         $code = "<?php\n// Configuracion generada por el instalador. No compartas este fichero.\nreturn " . var_export($CONFIG, true) . ";\n";

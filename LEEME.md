@@ -15,4 +15,6 @@ Para reinstalar desde cero: borra config/config.php y vacía la base de datos.
 
 Stripe: en el panel de Stripe crea un webhook hacia https://tudominio/stripe/webhook con el evento checkout.session.completed y pega su secreto en Ajustes > Cobros.
 
+Acceso de IA (MCP): viene apagado. Lo enciende el superusuario (la cuenta que instala) en Inteligencia artificial. La dirección del servidor es https://tudominio/mcp. Guía en docs/mcp.md.
+
 Librerías incluidas: qrcode-generator y jsQR (licencias MIT y Apache 2.0).

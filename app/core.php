@@ -1,6 +1,6 @@
 <?php
 // Nucleo: configuracion, base de datos, sesion, permisos y utilidades
-const APP_VER = '1.1.0';
+const APP_VER = '1.2.0';
 define('ROOT', dirname(__DIR__));
 $CONFIG = is_file(ROOT.'/config/config.php') ? require ROOT.'/config/config.php' : null;
 date_default_timezone_set(is_array($CONFIG) ? ($CONFIG['timezone'] ?? 'Europe/Madrid') : 'Europe/Madrid');
@@ -74,8 +74,22 @@ function migrate() {
         $have = $mysql ? array_column(rows("SHOW COLUMNS FROM $t"), 'Field') : array_column(rows("PRAGMA table_info($t)"), 'name');
         foreach ($def['cols'] as $c => $ty) if (!in_array($c, $have, true) && $ty !== 'pk' && $ty !== 'key') $pdo->exec("ALTER TABLE $t ADD COLUMN $c {$map[$ty]}");
     }
+    // El superusuario es quien instalo la plataforma. El acceso de IA nace apagado.
+    if (!val('SELECT COUNT(*) FROM users WHERE is_super=1')) q("UPDATE users SET is_super=1 WHERE id=(SELECT id FROM (SELECT MIN(id) AS id FROM users WHERE role='admin') x)");
+    if (!val("SELECT COUNT(*) FROM settings WHERE k='ai_enabled'")) set_setting('ai_enabled', '0');
+    // Si una actualizacion ha sobrescrito .htaccess, se vuelve a fijar la carpeta de instalacion
+    $ht = ROOT . '/.htaccess';
+    if (cfg('pretty', true) && PHP_SAPI !== 'cli-server' && is_file($ht) && is_writable($ht)) {
+        $c = file_get_contents($ht); $n = preg_replace('/^\s*#?\s*RewriteBase .*$/m', 'RewriteBase ' . base_path() . '/', $c);
+        if ($n !== null && $n !== $c) @file_put_contents($ht, $n);
+    }
     set_setting('schema_ver', APP_VER);
 }
+function is_super() { $u = user(); return $u && !empty($u['is_super']); }
+function ai_on() { return setting('ai_enabled', '0') === '1'; }
+// Perfiles a los que el superusuario permite conectar una IA
+function ai_roles() { return array_values(array_filter(explode(',', setting('ai_roles', 'admin')))); }
+function ai_allowed(array $u) { return !empty($u['is_super']) || in_array($u['role'], ai_roles(), true); }
 function create_schema(PDO $pdo, $mysql) {
     $map = col_types($mysql);
     foreach (require ROOT . '/app/schema.php' as $t => $def) {
@@ -106,6 +120,7 @@ function check_csrf() {
 }
 function is_post() { return ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST'; }
 function user() {
+    if (isset($GLOBALS['ACT_USER'])) return $GLOBALS['ACT_USER']; // usuario que actua a traves de un token de IA
     static $u = false;
     if ($u === false) { $u = empty($_SESSION['uid']) ? null : row('SELECT * FROM users WHERE id=? AND active=1', [$_SESSION['uid']]); }
     return $u;
@@ -146,6 +161,7 @@ function need($m, $lvl = 'r') {
     }
 }
 function log_activity($action, $detail = '') {
+    if (!empty($GLOBALS['VIA_AI'])) $action = 'IA: ' . $action;
     try { insert('activity', ['user_id' => user()['id'] ?? null, 'action' => $action, 'detail' => $detail, 'created_at' => now()]); } catch (Throwable $e) {}
 }
 
